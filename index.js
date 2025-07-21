@@ -19,7 +19,6 @@ let voiceData = []; // [{ userId, rms, timestamp }]
 let interval = null;
 
 function calculateRMS(buffer) {
-  // Mono PCM: buffer is 16-bit signed integer per sample
   let total = 0;
   for (let i = 0; i < buffer.length; i += 2) {
     let val = buffer.readInt16LE(i);
@@ -68,7 +67,7 @@ async function postSummary(interaction) {
     return;
   }
 
-  // Group by user: avg and peak, only count frames when actually speaking
+  // Group by user: avg and peak
   const users = {};
   for (const { userId, rms } of recentData) {
     if (!users[userId]) users[userId] = { total: 0, count: 0, peak: 0 };
@@ -77,9 +76,19 @@ async function postSummary(interaction) {
     if (rms > users[userId].peak) users[userId].peak = rms;
   }
 
-  const ref = 10; // Tweak for your server
+  const ref = 10; // Adjust for your server
+
   let summary = `**Voice Loudness Report (Last 5 Minutes, Estimated dB SPL):**\n`;
   for (const [userId, { total, count, peak }] of Object.entries(users)) {
+    // --- BOT FILTER ---
+    try {
+      const member = await interaction.guild.members.fetch(userId);
+      if (member.user.bot) continue; // Skip bots (including Anime Lofi Radio)
+    } catch (e) {
+      continue; // If user fetch fails, skip
+    }
+    // -------------------
+
     let avg = total / count;
     let dbAvg = 20 * Math.log10(avg / ref);
     let dbPeak = 20 * Math.log10(peak / ref);

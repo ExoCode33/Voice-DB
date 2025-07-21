@@ -2,7 +2,6 @@ const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Collection
 const { joinVoiceChannel, getVoiceConnection, EndBehaviorType } = require('@discordjs/voice');
 const prism = require('prism-media');
 
-// Use Railway environment variables!
 const TOKEN = process.env.DISCORD_TOKEN;
 const REPORT_CHANNEL_ID = process.env.REPORT_CHANNEL_ID;
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -43,10 +42,19 @@ client.commands.set('leave', {});
 client.commands.set('post-summary', {});
 
 client.once('ready', async () => {
-  // Register slash commands globally (for single-server bot, change as needed)
+  // Register slash commands globally or by guild for instant registration
   const rest = new REST({ version: '10' }).setToken(TOKEN);
-  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-  console.log(`Bot logged in as ${client.user.tag} and slash commands registered!`);
+  if (process.env.GUILD_ID) {
+    await rest.put(
+      Routes.applicationGuildCommands(CLIENT_ID, process.env.GUILD_ID), 
+      { body: commands }
+    );
+    console.log(`Registered slash commands for guild ${process.env.GUILD_ID}`);
+  } else {
+    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+    console.log(`Registered global slash commands (may take up to 1 hour to appear)`);
+  }
+  console.log(`Bot logged in as ${client.user.tag}!`);
 });
 
 async function postSummary(guild) {
@@ -70,10 +78,14 @@ async function postSummary(guild) {
     users[userId].count++;
   }
 
-  let summary = `**Voice Loudness Report (Last 5 Minutes, Relative RMS):**\n`;
+  // Calculate dB and build summary
+  const ref = 1000; // <-- Tweak this value for realistic dB (try 500–2000)
+  let summary = `**Voice Loudness Report (Last 5 Minutes, Estimated dB SPL):**\n`;
   for (const [userId, { total, count }] of Object.entries(users)) {
     let avg = total / count;
-    summary += `<@${userId}>: ${avg.toFixed(1)}\n`;
+    let db = 20 * Math.log10(avg / ref);
+    if (!isFinite(db)) db = 0;
+    summary += `<@${userId}>: ${db.toFixed(1)} dB\n`;
   }
   channel.send(summary);
 }
@@ -84,7 +96,7 @@ client.on('interactionCreate', async interaction => {
 
   if (commandName === 'join') {
     const voiceChannel = member.voice.channel;
-    if (!voiceChannel) return interaction.reply({ content: 'You must be in a voice channel first.', ephemeral: true });
+    if (!voiceChannel) return interaction.reply({ content: 'You must be in a voice channel first.', flags: 64 });
 
     joinVoiceChannel({
       channelId: voiceChannel.id,
@@ -92,7 +104,7 @@ client.on('interactionCreate', async interaction => {
       adapterCreator: guild.voiceAdapterCreator,
     });
 
-    interaction.reply({ content: `Joined voice channel: ${voiceChannel.name}`, ephemeral: true });
+    interaction.reply({ content: `Joined voice channel: ${voiceChannel.name}`, flags: 64 });
 
     // Clear interval if running
     if (interval) clearInterval(interval);
@@ -123,11 +135,11 @@ client.on('interactionCreate', async interaction => {
     if (connection) connection.destroy();
     if (interval) clearInterval(interval);
     voiceData = [];
-    interaction.reply({ content: 'Left the voice channel and stopped recording.', ephemeral: true });
+    interaction.reply({ content: 'Left the voice channel and stopped recording.', flags: 64 });
   }
 
   if (commandName === 'post-summary') {
-    await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply({ flags: 64 });
     await postSummary(guild);
     await interaction.editReply('Posted dB summary for the last 5 minutes!');
   }

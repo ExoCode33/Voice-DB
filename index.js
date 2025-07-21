@@ -19,6 +19,7 @@ let voiceData = []; // [{ userId, rms, timestamp }]
 let interval = null;
 
 function calculateRMS(buffer) {
+  // Mono PCM: buffer is 16-bit signed integer per sample
   let total = 0;
   for (let i = 0; i < buffer.length; i += 2) {
     let val = buffer.readInt16LE(i);
@@ -41,7 +42,6 @@ client.commands.set('leave', {});
 client.commands.set('post-summary', {});
 
 client.once('ready', async () => {
-  // Register slash commands globally or by guild for instant registration
   const rest = new REST({ version: '10' }).setToken(TOKEN);
   if (process.env.GUILD_ID) {
     await rest.put(
@@ -68,7 +68,7 @@ async function postSummary(interaction) {
     return;
   }
 
-  // Group by user: avg and peak
+  // Group by user: avg and peak, only count frames when actually speaking
   const users = {};
   for (const { userId, rms } of recentData) {
     if (!users[userId]) users[userId] = { total: 0, count: 0, peak: 0 };
@@ -77,7 +77,7 @@ async function postSummary(interaction) {
     if (rms > users[userId].peak) users[userId].peak = rms;
   }
 
-  const ref = 10; // <<--- Tweak this value for your server if needed (try 5 or 20 for tuning)
+  const ref = 10; // Tweak for your server
   let summary = `**Voice Loudness Report (Last 5 Minutes, Estimated dB SPL):**\n`;
   for (const [userId, { total, count, peak }] of Object.entries(users)) {
     let avg = total / count;
@@ -120,8 +120,9 @@ client.on('interactionCreate', async interaction => {
 
     const receiver = connection.receiver;
     receiver.speaking.on('start', (userId) => {
+      // Use MONO for more realistic per-person measurement
       const opusStream = receiver.subscribe(userId, { end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 } });
-      const pcmStream = opusStream.pipe(new prism.opus.Decoder({ channels: 2, rate: 48000, frameSize: 960 }));
+      const pcmStream = opusStream.pipe(new prism.opus.Decoder({ channels: 1, rate: 48000, frameSize: 960 }));
 
       pcmStream.on('data', (chunk) => {
         const rms = calculateRMS(chunk);

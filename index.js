@@ -3,7 +3,6 @@ const { joinVoiceChannel, getVoiceConnection, EndBehaviorType } = require('@disc
 const prism = require('prism-media');
 
 const TOKEN = process.env.DISCORD_TOKEN;
-const REPORT_CHANNEL_ID = process.env.REPORT_CHANNEL_ID;
 const CLIENT_ID = process.env.CLIENT_ID;
 
 const client = new Client({
@@ -57,8 +56,8 @@ client.once('ready', async () => {
   console.log(`Bot logged in as ${client.user.tag}!`);
 });
 
-async function postSummary(guild) {
-  const channel = await guild.channels.fetch(REPORT_CHANNEL_ID);
+async function postSummary(interaction) {
+  const channel = interaction.channel;
   if (!channel) return;
 
   const now = Date.now();
@@ -78,7 +77,7 @@ async function postSummary(guild) {
     if (rms > users[userId].peak) users[userId].peak = rms;
   }
 
-  const ref = 1000; // Adjust as needed for dB realism (typical: 500–2000)
+  const ref = 10; // <<--- Tweak this value for your server if needed (try 5 or 20 for tuning)
   let summary = `**Voice Loudness Report (Last 5 Minutes, Estimated dB SPL):**\n`;
   for (const [userId, { total, count, peak }] of Object.entries(users)) {
     let avg = total / count;
@@ -141,7 +140,7 @@ client.on('interactionCreate', async interaction => {
 
   if (commandName === 'post-summary') {
     await interaction.deferReply({ flags: 64 });
-    await postSummary(guild);
+    await postSummary(interaction);
     await interaction.editReply('Posted dB summary for the last 5 minutes!');
   }
 });

@@ -62,7 +62,6 @@ async function postSummary(guild) {
   if (!channel) return;
 
   const now = Date.now();
-  // Only last 5 min
   const recentData = voiceData.filter(v => now - v.timestamp <= dataWindow);
 
   if (recentData.length === 0) {
@@ -70,22 +69,24 @@ async function postSummary(guild) {
     return;
   }
 
-  // Group by user
+  // Group by user: avg and peak
   const users = {};
   for (const { userId, rms } of recentData) {
-    if (!users[userId]) users[userId] = { total: 0, count: 0 };
+    if (!users[userId]) users[userId] = { total: 0, count: 0, peak: 0 };
     users[userId].total += rms;
     users[userId].count++;
+    if (rms > users[userId].peak) users[userId].peak = rms;
   }
 
-  // Calculate dB and build summary
-  const ref = 1000; // <-- Tweak this value for realistic dB (try 500–2000)
+  const ref = 1000; // Adjust as needed for dB realism (typical: 500–2000)
   let summary = `**Voice Loudness Report (Last 5 Minutes, Estimated dB SPL):**\n`;
-  for (const [userId, { total, count }] of Object.entries(users)) {
+  for (const [userId, { total, count, peak }] of Object.entries(users)) {
     let avg = total / count;
-    let db = 20 * Math.log10(avg / ref);
-    if (!isFinite(db)) db = 0;
-    summary += `<@${userId}>: ${db.toFixed(1)} dB\n`;
+    let dbAvg = 20 * Math.log10(avg / ref);
+    let dbPeak = 20 * Math.log10(peak / ref);
+    if (!isFinite(dbAvg)) dbAvg = 0;
+    if (!isFinite(dbPeak)) dbPeak = 0;
+    summary += `<@${userId}>: avg ${dbAvg.toFixed(1)} dB, peak ${dbPeak.toFixed(1)} dB\n`;
   }
   channel.send(summary);
 }

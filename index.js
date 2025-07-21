@@ -2,9 +2,10 @@ const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Collection
 const { joinVoiceChannel, getVoiceConnection, EndBehaviorType } = require('@discordjs/voice');
 const prism = require('prism-media');
 
-const TOKEN = 'YOUR_BOT_TOKEN_HERE'; // <-- Replace with your bot token
-const REPORT_CHANNEL_ID = 'YOUR_TEXT_CHANNEL_ID'; // <-- Replace with your text channel ID
-const CLIENT_ID = 'YOUR_CLIENT_ID'; // <-- Discord Developer Portal App ID
+// Use Railway environment variables!
+const TOKEN = process.env.DISCORD_TOKEN;
+const REPORT_CHANNEL_ID = process.env.REPORT_CHANNEL_ID;
+const CLIENT_ID = process.env.CLIENT_ID;
 
 const client = new Client({
   intents: [
